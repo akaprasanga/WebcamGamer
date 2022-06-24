@@ -1,5 +1,5 @@
 from flask import send_from_directory
-from flask import Flask, flash, request, redirect, url_for
+from flask import Flask, flash, request, redirect, url_for, Response
 from werkzeug.utils import secure_filename
 from flask import render_template
 from url_utils import get_base_url
@@ -11,7 +11,7 @@ import cv2
 
 # setup the webserver
 # port may need to be changed if there are multiple flask servers running on same server
-port = 12346
+port = 12347
 base_url = get_base_url(port)
 video = cv2.VideoCapture(0)
 
@@ -132,7 +132,7 @@ def files(filename):
 # @app.route(f'{base_url}/team_members')
 # def team_members():
 #     return render_template('team_members.html') # would need to actually make this page
-def target_function():
+def target_function(video):
     while True:
         success, image = video.read()
         # detected = "D:\AICamp\CrashCourse\HaarWebcam\static\yolov5"
@@ -155,6 +155,15 @@ def target_function():
                 pyautogui.click()
         # print("Results::", results)
 
+                # encode the frame in JPEG format
+        image = results.render()[0]
+        (flag, encodedImage) = cv2.imencode(".jpg", image)
+                # ensure the frame was successfully encoded
+
+        # yield the output frame in the byte format
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' +
+               bytearray(encodedImage) + b'\r\n')
+
         # results = results.render()[0]
         # image = results
         # ret, jpeg = cv2.imencode('.jpg', image)
@@ -170,11 +179,17 @@ def target_function():
 #background process happening without any refreshing
 @app.route('/background_process_test')
 def background_process_test():
-    t = threading.Thread(target=target_function(), name="name")
+    t = threading.Thread(target=target_function(), name="name", args=video)
     t.daemon = True
     t.start()
     return ("nothing")
 
+@app.route("/video_feed")
+def video_feed():
+	# return the response generated along with the specific media
+	# type (mime type)
+	return Response(target_function(video),
+		mimetype = "multipart/x-mixed-replace; boundary=frame")
 
 if __name__ == '__main__':
     # IMPORTANT: change url to the site where you are editing this file.
